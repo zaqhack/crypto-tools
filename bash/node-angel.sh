@@ -8,7 +8,6 @@
 #     console.js - the javascript console for Phala
 #     docker-compose.yml - A list of containers that includes khala-node
 #     .env - Variables to manage docker-compose
-
 INSTALLDIR=/opt/phala
 
 # Optional - push the findings to InfluxDB so you can graph them, later.
@@ -56,7 +55,7 @@ else
         # The peers threshold here is set to 8.
         # If it falls below that, restart node.
         TOTAL_PEERS=$(( ${KUSAMA_PEERS}+${KHALA_PEERS} ))
-        if [ "${TOTAL_PEERS}" -lt "8" ]
+        if [ "${TOTAL_PEERS}" -lt 8 ]
         then
                 ((REBOOT_FLAG++))
                 echo "RBF=${REBOOT_FLAG}: Too few peers ..."
@@ -79,6 +78,19 @@ else
                 ((REBOOT_FLAG++))
                 echo "RBF=${REBOOT_FLAG}: Kusama block height not updated in over 5 minutes ..."
         fi
+
+        # Per h4x3rotab's suggestion: Does the word "panic"
+        # appear in the last 100 lines of the phala-node log?
+        # If so, restart the node.
+        CURRENTDIR=`pwd`
+        cd ${INSTALLDIR}
+        PANIC_COUNT=$(/usr/local/bin/docker-compose logs --tail 100 | grep -i panic | wc -l)
+        if [ "${PANIC_COUNT}" -gt 0 ]
+        then
+                ((REBOOT_FLAG++))
+                echo "RBF=${REBOOT_FLAG}: Node log shows recent panic messages."
+        fi
+        cd ${CURRENTDIR}
 fi
 
 # Save it all back to the node-angel.dat file
@@ -88,6 +100,7 @@ echo LAST_KUSAMA_HEIGHT=${CURRENT_KUSAMA_HEIGHT} >> ${INSTALLDIR}/node-angel.dat
 echo LAST_KHALA_HEIGHT=${CURRENT_KHALA_HEIGHT} >> ${INSTALLDIR}/node-angel.dat
 echo KUSAMA_PEERS=${KUSAMA_PEERS} >> ${INSTALLDIR}/node-angel.dat
 echo KHALA_PEERS=${KHALA_PEERS} >> ${INSTALLDIR}/node-angel.dat
+echo PANIC_COUNT=${PANIC_COUNT} >> ${INSTALLDIR}/node-angel.dat
 
 # Do we have a valid InfluxDB host?
 if [ "${INFLUXDBHOST}" != "no" ]
@@ -99,6 +112,7 @@ then
         echo "khala_node_kusama_peers,host=${H} value=${KUSAMA_PEERS}" >> /tmp/influxdbpayload.tmp
         echo "khala_node_khala_height,host=${H} value=${CURRENT_KHALA_HEIGHT}" >> /tmp/influxdbpayload.tmp
         echo "khala_node_khala_peers,host=${H} value=${KHALA_PEERS}" >> /tmp/influxdbpayload.tmp
+        echo "khala_node_panic_count,host=${H} value=${PANIC_COUNT}" >> /tmp/influxdbpayload.tmp
         if [ "${NODE_UPTIME}" -gt 600 ] && [ "${REBOOT_FLAG}" -gt 0 ]
         then
                 echo "khala_node_reboot,host=${H} value=1" >> /tmp/influxdbpayload.tmp
@@ -117,6 +131,7 @@ then
         # Show what we picked up to stdout
         echo Node uptime: ${NODE_UPTIME}
         echo Total REBOOT_FLAG: ${REBOOT_FLAG}
+        echo Node log panics: ${PANIC_COUNT}
         echo Kusama - Blocks: ${CURRENT_KUSAMA_HEIGHT}  Peers: ${KUSAMA_PEERS}
         echo Khala  - Blocks: ${CURRENT_KHALA_HEIGHT}  Peers: ${KHALA_PEERS}
 fi
@@ -131,7 +146,7 @@ then
                 CURRENTDIR=`pwd`
                 cd ${INSTALLDIR}
                 /usr/bin/docker stop phala-node
-                /usr/bin/docker-compose up -d phala-node
+                /usr/local/bin/docker-compose up -d phala-node
                 cd ${CURRENTDIR}
         fi
 fi
