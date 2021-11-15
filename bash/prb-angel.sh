@@ -72,6 +72,7 @@ function _check_logs {
         # of the process log? If so, restart process
 
         PANIC=$(/usr/bin/docker logs --tail 30 "phala_${1}_1" | grep -i fatal | wc -l)
+        PANIC=expr $PANIC + $(/usr/bin/docker logs --tail 100 "phala_${1}_1" | grep -i "disconnected from ws" | wc -l)
         if [ "${PANIC}" -gt 0 ]
         then
                 # Is this run from a cron job?
