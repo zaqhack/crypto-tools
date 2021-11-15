@@ -105,7 +105,7 @@ function _lifecycle_check {
                         if [ $DELTA -gt 360 ]; then RESTART="yes"; fi
                 else
                         let $(eval "echo TIME_${METRIC}")=`date +%s%s`
-                        let $(eval "echo LAST_${METRIC}")=$(eval "echo ${METRIC}")`
+                        let $(eval "echo LAST_${METRIC}")=$(eval "echo ${METRIC}")
                 fi
 
                 # Add discovered stats to InfluxDB payload
