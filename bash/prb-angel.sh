@@ -101,8 +101,9 @@ function _lifecycle_check {
                         if [ $DELTA -gt 360 ]; then RESTART="yes"; fi
                 else
                         echo "Now = Unique for "${METRIC}
+                        echo "Current metric = "$(eval "echo ${METRIC}")
                         let "$(eval echo TIME_${METRIC})"=`date +%s`
-                        let "$(eval echo LAST_${METRIC})"=$(eval "echo ${METRIC}")
+                        let "$(eval echo LAST_${METRIC})"=`echo $(eval "echo ${METRIC}")`
                 fi
 
                 # Add discovered stats to InfluxDB payload
@@ -113,8 +114,8 @@ function _lifecycle_check {
                 fi
 
                 # Add this metric to the .lifecycle.dat file
-                echo "LAST_${METRIC}="\$$(eval "echo LAST_${METRIC}") >> .lifecycle.dat
-                echo "TIME_${METRIC}="\$$(eval "echo TIME_${METRIC}") >> .lifecycle.dat
+                echo "LAST_${METRIC}="`echo $(eval "echo LAST_${METRIC}")` >> .lifecycle.dat
+                echo "TIME_${METRIC}="`echo $(eval "echo TIME_${METRIC}")` >> .lifecycle.dat
         done
 
         # Is the process stuck on a particular block? If so, restart.
