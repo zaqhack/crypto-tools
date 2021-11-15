@@ -95,15 +95,17 @@ function _lifecycle_check {
         rm .lifecycle.dat
         touch .lifecycle.dat
         for METRIC in ${K[@]}; do
-                echo "Current metric = $(eval "echo ${METRIC}")"
-                echo "Last metric = $(eval "echo LAST_${METRIC}")"
-                echo "Metric timestamp = $(eval "echo TIME_${METRIC}")"
+                echo "Current metric = ${METRIC} = $(eval "echo \$${METRIC}")"
+                echo "Last metric = $(eval "echo \$LAST_${METRIC}")"
+                echo "Metric timestamp = $(eval "echo \$TIME_${METRIC}")"
 
-                if [[ $(eval "echo ${METRIC}") -eq $(eval "echo LAST_${METRIC}") ]]
+                if [[ $(eval "echo \$${METRIC}") -eq $(eval "echo \$LAST_${METRIC}") ]]
                 then
+                        echo "Same value"
                         DELTA=$(expr `date +%s` - $(eval "echo TIME_${METRIC}"))
                         if [ $DELTA -gt 360 ]; then RESTART="yes"; fi
                 else
+                        echo "Different value"
                         let $(eval "echo TIME_${METRIC}")=`date +%s%s`
                         let $(eval "echo LAST_${METRIC}")=$(eval "echo ${METRIC}")
                 fi
@@ -112,12 +114,12 @@ function _lifecycle_check {
                 if [ "${INFLUXDBHOST}" != "no" ]
                 then
                         LABEL=`echo "${METRIC}" | tr '[:upper:]' '[:lower:]'`
-                        echo "phala_${X}_${LABEL},host=${H} value=$(eval "echo ${METRIC}")" >> /tmp/influxdbpayload.tmp    
+                        echo "phala_${X}_${LABEL},host=${H} value=$(eval "echo \$${METRIC}")" >> /tmp/influxdbpayload.tmp    
                 fi
 
                 # Add this metric to the .lifecycle.dat file
-                echo "LAST_${METRIC}=$(eval "echo LAST_${METRIC}")" >> .lifecycle.dat
-                echo "TIME_${METRIC}=$(eval "echo TIME_${METRIC}")" >> .lifecycle.dat
+                echo "LAST_${METRIC}=$(eval "echo \$LAST_${METRIC}")" >> .lifecycle.dat
+                echo "TIME_${METRIC}=$(eval "echo \$TIME_${METRIC}")" >> .lifecycle.dat
         done
 
         # Is the process stuck on a particular block? If so, restart.
