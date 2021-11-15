@@ -80,17 +80,11 @@ function _check_logs {
         fi
 }
 
-function _lifecycle_check {
+function _blockchain_check {
         RESTART="no"
-        source .lifecycle.dat
-        J=$(docker logs --tail 30 phala_lifecycle_1 | grep fetcherStateUpdate | tail -1)
-        KHALA_CURRENT=$(echo ${J} | jq '.content.fetcherStateUpdate.paraBlobHeight')
-        KHALA_HEIGHT=$(echo ${J} | jq '.content.fetcherStateUpdate.paraKnownHeight')
-        KUSAMA_CURRENT=$(echo ${J} | jq '.content.fetcherStateUpdate.parentBlobHeight')
-        KUSAMA_HEIGHT=$(echo ${J} | jq '.content.fetcherStateUpdate.parentKnownHeight')
-        
-        rm .lifecycle.dat
-        touch .lifecycle.dat
+        source .${X}.dat
+        rm .${X}.dat
+        touch .${X}.dat
         for METRIC in ${K[@]}; do
                 # Was getting too deep into the indirect references and getting errors
                 # This pulls out one level of recursion/indirection:
@@ -128,20 +122,20 @@ function _lifecycle_check {
                         echo "phala_${X}_${LABEL},host=${H} value=$(eval "echo \$${METRIC}")" >> /tmp/influxdbpayload.tmp    
                 fi
 
-                # Add this metric to the .lifecycle.dat file
-                echo "LAST_${METRIC}=$(eval "echo \$${Z}")" >> .lifecycle.dat
-                echo "TIME_${METRIC}=$(eval "echo \$${T}")" >> .lifecycle.dat
+                # Add this metric to the .(process).dat file
+                echo "LAST_${METRIC}=$(eval "echo \$${Z}")" >> .${X}.dat
+                echo "TIME_${METRIC}=$(eval "echo \$${T}")" >> .${X}.dat
         done
 
         # Is the process stuck on a particular block? If so, restart.
-        if [ "$RESTART" == "yes" ]; then _restart_container lifecycle; fi
+        if [ "$RESTART" == "yes" ]; then _restart_container ${X}; fi
 }
 
 if [ "${INFLUXDBHOST}" != "no" ]
 then
         # Reset InfluxDB payload file
         touch /tmp/influxdbpayload.tmp
-        rm /tmp/influxdbpayload.tmp
+        rm /tmp/influxdbpayload.tmp./
         touch /tmp/influxdbpayload.tmp
         H=`hostname`
 fi
@@ -157,12 +151,21 @@ do
                 then
                         case "$X" in
                                 fetch)
-                                        echo "Future Fetch Test"
+                                        J=$(docker logs --tail 100 phala_fetch_1 | grep "Saved dryCache" | grep -v ":-1," | tail -1)
+                                        KHALA_CURRENT=$(echo ${J} | jq '.parentStartBlock')
+                                        KHALA_HEIGHT=$(echo ${J} | jq '.parentStopBlock')
+                                        KUSAMA_CURRENT=$(echo ${J} | jq '.paraStartBlock')
+                                        KUSAMA_HEIGHT=$(echo ${J} | jq '.paraStopBlock')
+                                        _blockchain_check
                                         ;;
 
                                 lifecycle)
-                                        _lifecycle_check
-                                      
+                                        J=$(docker logs --tail 30 phala_lifecycle_1 | grep fetcherStateUpdate | tail -1)
+                                        KHALA_CURRENT=$(echo ${J} | jq '.content.fetcherStateUpdate.paraBlobHeight')
+                                        KHALA_HEIGHT=$(echo ${J} | jq '.content.fetcherStateUpdate.paraKnownHeight')
+                                        KUSAMA_CURRENT=$(echo ${J} | jq '.content.fetcherStateUpdate.parentBlobHeight')
+                                        KUSAMA_HEIGHT=$(echo ${J} | jq '.content.fetcherStateUpdate.parentKnownHeight')
+                                        _blockchain_check
                                         ;;
 
                         esac
