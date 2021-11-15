@@ -5,7 +5,8 @@
 # Version 03
 
 # Constants - change them to meet your environment and/or tastes
-#
+DEBUG=0    # Set to 1 to enable
+
 # Directory requirements. Personally, I set this up with an Ansible role.
 #     console.js - the javascript console for Phala
 #     docker-compose.yml - A list of containers that includes khala-node
@@ -19,13 +20,10 @@ if [ "$1" == "cron" ]; then CRONJOB="yes";
 # Optional - push the findings to InfluxDB so you can graph them, later.
 #     Put IP:PORT here if you want to use this feature or "no" for disabled.
 INFLUXDBHOST=jalea.sgt.cc:59087
-#     Name of the database?
-INFLUXDBNAME=homebrew
+INFLUXDBNAME=homebrew    # Name of the database
 
-# An array of process names we need to check on to make sure PRB is UP.
+# Process arrays to make the checks interative/recycle-able
 PRB_PROCESSES=("fetch" "lifecycle" "trade" "monitor")
-
-# An array of variable names to re-use so the script isn't 1,000 lines long
 K=("KHALA_CURRENT" "KHALA_HEIGHT" "KUSAMA_CURRENT" "KUSAMA_HEIGHT")
 
 # This counts how many things go wrong along the way.
@@ -86,7 +84,6 @@ function _lifecycle_check {
         RESTART="no"
         source .lifecycle.dat
         J=$(docker logs --tail 30 phala_lifecycle_1 | grep fetcherStateUpdate | tail -1)
-        echo $J
         KHALA_CURRENT=$(echo ${J} | jq '.content.fetcherStateUpdate.paraBlobHeight')
         KHALA_HEIGHT=$(echo ${J} | jq '.content.fetcherStateUpdate.paraKnownHeight')
         KUSAMA_CURRENT=$(echo ${J} | jq '.content.fetcherStateUpdate.parentBlobHeight')
@@ -97,31 +94,36 @@ function _lifecycle_check {
         for METRIC in ${K[@]}; do
                 # Was getting too deep into the indirect references and getting errors
                 # This pulls out one level of recursion/indirection:
-                Z="LAST_${METRIC}"
-                T="TIME_${METRIC}"
-                echo "Current metric = ${METRIC} = $(eval "echo \$${METRIC}")"
-                echo "Last metric = $(eval "echo \$${Z}")"
-                echo "Metric timestamp = $(eval "echo \$${T}")"
+                Z="LAST_${METRIC}"; T="TIME_${METRIC}"
+                
+                if [ $DEBUG -gt 0 ]; then  # Some debug things for indirect references
+                        echo "Current metric = ${METRIC} = $(eval "echo \$${METRIC}")"
+                        echo "Last metric = $(eval "echo \$${Z}")"
+                        echo "Metric timestamp = $(eval "echo \$${T}")"
+                fi
 
+                # Is the current metric the same as the one we saved in the file last time?
                 if [[ $(eval "echo \$${METRIC}") -eq $(eval "echo \$${Z}") ]]
                 then
-                        echo "Same value"
                         DELTA=$(expr `date +%s` - $(eval "echo \$${T}"))
-                        echo "Delta seconds = $DELTA"
-                        if [ $DELTA -gt 360 ]
-                        then
-                                echo "${METRIC} is frozen ... setting restart flag."
+                        
+                        if [ $DEBUG -gt 0 ]; then  # Some more debug info
+                                echo "Same value"; echo "Delta seconds = $DELTA"; fi
+
+                        if [ $DELTA -gt 360 ]; then
+                                if [ "$CRONJOB" == "no" ]; then
+                                        echo "${METRIC} is frozen ... setting restart flag."; fi
                                 RESTART="yes"
                         fi
                 else
-                        echo "Different value"
+                        if [ $DEBUG -gt 0 ]; then echo "Different value"; fi # Still more Debug
+
                         let $(eval "echo ${T}")=$(date +%s)
                         let $(eval "echo ${Z}")=$(eval "echo \$${METRIC}")
                 fi
 
                 # Add discovered stats to InfluxDB payload
-                if [ "${INFLUXDBHOST}" != "no" ]
-                then
+                if [ "${INFLUXDBHOST}" != "no" ]; then
                         LABEL=`echo "${METRIC}" | tr '[:upper:]' '[:lower:]'`
                         echo "phala_${X}_${LABEL},host=${H} value=$(eval "echo \$${METRIC}")" >> /tmp/influxdbpayload.tmp    
                 fi
