@@ -86,6 +86,7 @@ function _lifecycle_check {
         RESTART="no"
         source .lifecycle.dat
         J=$(docker logs --tail 200 phala_lifecycle_1 | grep fetcherStateUpdate | tail -1)
+        echo $J
         KHALA_CURRENT=$(echo ${J} | jq '.content.fetcherStateUpdate.paraBlobHeight')
         KHALA_HEIGHT=$(echo ${J} | jq '.content.fetcherStateUpdate.paraKnownHeight')
         KUSAMA_CURRENT=$(echo ${J} | jq '.content.fetcherStateUpdate.parentBlobHeight')
@@ -101,9 +102,9 @@ function _lifecycle_check {
                         if [ $DELTA -gt 360 ]; then RESTART="yes"; fi
                 else
                         echo "Now = Unique for "${METRIC}
-                        echo "Current metric = "$(eval "echo ${METRIC}")
-                        let "$(eval echo TIME_${METRIC})"=`date +%s`
-                        let "$(eval echo LAST_${METRIC})"=`echo $(eval "echo ${METRIC}")`
+                        echo "Current metric = "\$$(eval "echo ${METRIC}")
+                        let $(eval "echo TIME_${METRIC}")"="`date +%s`
+                        let $(eval "echo LAST_${METRIC}")"="`echo \$$(eval "echo ${METRIC}")`
                 fi
 
                 # Add discovered stats to InfluxDB payload
