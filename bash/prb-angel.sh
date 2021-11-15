@@ -135,7 +135,7 @@ if [ "${INFLUXDBHOST}" != "no" ]
 then
         # Reset InfluxDB payload file
         touch /tmp/influxdbpayload.tmp
-        rm /tmp/influxdbpayload.tmp./
+        rm /tmp/influxdbpayload.tmp
         touch /tmp/influxdbpayload.tmp
         H=`hostname`
 fi
