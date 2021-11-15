@@ -152,10 +152,10 @@ do
                         case "$X" in
                                 fetch)
                                         J=$(docker logs --tail 100 phala_fetch_1 | grep "Saved dryCache" | grep -v ":-1," | tail -1)
-                                        KHALA_CURRENT=$(echo ${J} | jq '.parentStartBlock')
-                                        KHALA_HEIGHT=$(echo ${J} | jq '.parentStopBlock')
-                                        KUSAMA_CURRENT=$(echo ${J} | jq '.paraStartBlock')
-                                        KUSAMA_HEIGHT=$(echo ${J} | jq '.paraStopBlock')
+                                        KHALA_CURRENT=$(echo ${J} | jq '.paraStartBlock')
+                                        KHALA_HEIGHT=$(echo ${J} | jq '.paraStopBlock')
+                                        KUSAMA_CURRENT=$(echo ${J} | jq '.parentStartBlock')
+                                        KUSAMA_HEIGHT=$(echo ${J} | jq '.parentStopBlock')
                                         _blockchain_check
                                         ;;
 
