@@ -96,13 +96,15 @@ function _lifecycle_check {
         touch .lifecycle.dat
         for METRIC in ${K[@]}; do
                 echo "Current metric = ${METRIC} = $(eval "echo \$${METRIC}")"
-                echo "Last metric = $(eval "echo \$LAST_${METRIC}")"
-                echo "Metric timestamp = $(eval "echo \$TIME_${METRIC}")"
+                Z="\$LAST_${METRIC}"
+                echo "Last metric = $(eval "echo ${Z}")"
+                T="\$TIME_${METRIC}"
+                echo "Metric timestamp = $(eval "echo ${T}")"
 
-                if [[ $(eval "echo \$${METRIC}") -eq $(eval "echo \$LAST_${METRIC}") ]]
+                if [[ $(eval "echo \$${METRIC}") -eq $(eval "echo ${Z}") ]]
                 then
                         echo "Same value"
-                        DELTA=$(expr `date +%s` - $(eval "echo TIME_${METRIC}"))
+                        DELTA=$(expr `date +%s` - $(eval "echo ${T}"))
                         if [ $DELTA -gt 360 ]; then RESTART="yes"; fi
                 else
                         echo "Different value"
