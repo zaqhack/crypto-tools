@@ -19,7 +19,7 @@ if [ "$1" == "cron" ]; then CRONJOB="yes";
 
 # Optional - push the findings to InfluxDB so you can graph them, later.
 #     Put IP:PORT here if you want to use this feature or "no" for disabled.
-INFLUXDBHOST=jalea.sgt.cc:59087
+INFLUXDBHOST=no
 INFLUXDBNAME=homebrew    # Name of the database
 
 # Process arrays to make the checks interative/recycle-able
