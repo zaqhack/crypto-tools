@@ -95,21 +95,28 @@ function _lifecycle_check {
         rm .lifecycle.dat
         touch .lifecycle.dat
         for METRIC in ${K[@]}; do
+                # Was getting too deep into the indirect references and getting errors
+                # This pulls out one level of recursion/indirection:
+                Z="LAST_${METRIC}"
+                T="TIME_${METRIC}"
                 echo "Current metric = ${METRIC} = $(eval "echo \$${METRIC}")"
-                Z="\$LAST_${METRIC}"
-                echo "Last metric = $(eval "echo ${Z}")"
-                T="\$TIME_${METRIC}"
-                echo "Metric timestamp = $(eval "echo ${T}")"
+                echo "Last metric = $(eval "echo \$${Z}")"
+                echo "Metric timestamp = $(eval "echo \$${T}")"
 
-                if [[ $(eval "echo \$${METRIC}") -eq $(eval "echo ${Z}") ]]
+                if [[ $(eval "echo \$${METRIC}") -eq $(eval "echo \$${Z}") ]]
                 then
                         echo "Same value"
-                        DELTA=$(expr `date +%s` - $(eval "echo ${T}"))
-                        if [ $DELTA -gt 360 ]; then RESTART="yes"; fi
+                        DELTA=$(expr `date +%s` - $(eval "echo \$${T}"))
+                        echo "Delta seconds = $DELTA"
+                        if [ $DELTA -gt 360 ]
+                        then
+                                echo "${METRIC} is frozen ... setting restart flag."
+                                RESTART="yes"
+                        fi
                 else
                         echo "Different value"
-                        let $(eval "echo TIME_${METRIC}")=`date +%s%s`
-                        let $(eval "echo LAST_${METRIC}")=$(eval "echo ${METRIC}")
+                        let $(eval "echo ${T}")=$(date +%s)
+                        let $(eval "echo ${Z}")=$(eval "echo \$${METRIC}")
                 fi
 
                 # Add discovered stats to InfluxDB payload
@@ -120,8 +127,8 @@ function _lifecycle_check {
                 fi
 
                 # Add this metric to the .lifecycle.dat file
-                echo "LAST_${METRIC}=$(eval "echo \$LAST_${METRIC}")" >> .lifecycle.dat
-                echo "TIME_${METRIC}=$(eval "echo \$TIME_${METRIC}")" >> .lifecycle.dat
+                echo "LAST_${METRIC}=$(eval "echo \$${Z}")" >> .lifecycle.dat
+                echo "TIME_${METRIC}=$(eval "echo \$${T}")" >> .lifecycle.dat
         done
 
         # Is the process stuck on a particular block? If so, restart.
