@@ -2,6 +2,8 @@
 # Performance tracking for this script within itself
 PERF_START=$(echo $EPOCHREALTIME | sed 's/\.//')
 
+# The following configuration file must contain $H (hostnmae), $FS_Tracked, $MEM_TRACKED, $PROC_TRACKED,
+# $TF (the temp file for building the payload), and the $INFLUXDB and $DATABASE connection strings.
 source homebrew.env
 
 # Report CPU LoadAverage
