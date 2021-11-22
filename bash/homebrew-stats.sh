@@ -2,28 +2,7 @@
 # Performance tracking for this script within itself
 PERF_START=$(echo $EPOCHREALTIME | sed 's/\.//')
 
-# Homebrew system metrics - only gather what we want
-# The purpose is to avoid Prometheus, Telegraf, et al
-
-# Hostname that will be tagged in InfluxDB
-H=$(hostname)
-
-# Partitions that we are tracking usage on
-# These are used for "grep" and have to be unique in "df"
-FS_TRACKED=("vda1" "vdb1")
-
-# Similarly, these are the memory stats we're going to report
-# These are used for "grep" and have to be unique in "/proc/meminfo"
-MEM_TRACKED=("memtotal" "memfree" "swapcached" "swaptotal" "swapfree")
-
-# Finally, these are the processes we're going to track
-# These are used for "grep" and have to be unique in "ps"
-PROC_TRACKED=("phala-node" )
-
-# Reset the payload file in case it exists
-TF="/tmp/influxdb_vitals.tmp"
-rm ${TF}
-touch ${TF}
+source homebrew.env
 
 # Report CPU LoadAverage
 CPU=$(cat /proc/loadavg)
@@ -64,7 +43,7 @@ if [ "$PERF_START" != "" ]; then
         echo "gather_stats_musec,host=${H} value="$(( $(echo $EPOCHREALTIME | sed 's/\.//') - ${PERF_START} )) | tee -a ${TF}
 fi
 
-curl -i -XPOST "http://(INFLUXDB)/write?db=homebrew" --data-binary @${TF}
+curl -i -XPOST "http://${INFLUXDB}/write?db=${DATABASE}" --data-binary @${TF}
 
 if [ "$PERF_START" != "" ]; then
         echo
