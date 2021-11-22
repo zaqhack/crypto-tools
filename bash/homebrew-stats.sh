@@ -60,9 +60,13 @@ do
         echo "$PSR" | grep -i ${P} | awk -v LABEL="proc_virtualmem_${P},host=${H} value=" '{ print LABEL $4 }' >> ${TF}
 done
 
-echo "gather_stats_musec,host=${H} value="$(( $(echo $EPOCHREALTIME | sed 's/\.//') - ${PERF_START} )) | tee -a ${TF}
+if [ "$PERF_START" != "" ]; then
+        echo "gather_stats_musec,host=${H} value="$(( $(echo $EPOCHREALTIME | sed 's/\.//') - ${PERF_START} )) | tee -a ${TF}
+fi
 
 curl -i -XPOST "http://(INFLUXDB)/write?db=homebrew" --data-binary @${TF}
 
-echo
-echo $(( $(echo $EPOCHREALTIME | sed 's/\.//') - ${PERF_START} )) microseconds to run this script.
+if [ "$PERF_START" != "" ]; then
+        echo
+        echo $(( $(echo $EPOCHREALTIME | sed 's/\.//') - ${PERF_START} )) microseconds to run this script.
+fi
