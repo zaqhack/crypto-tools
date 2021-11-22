@@ -10,7 +10,7 @@ H=$(hostname)
 
 # Partitions that we are tracking usage on
 # These are used for "grep" and have to be unique in "df"
-FS_TRACKED=("sda1" "nvme0n1p1")
+FS_TRACKED=("vda1" "vdb1")
 
 # Similarly, these are the memory stats we're going to report
 # These are used for "grep" and have to be unique in "/proc/meminfo"
@@ -18,10 +18,10 @@ MEM_TRACKED=("memtotal" "memfree" "swapcached" "swaptotal" "swapfree")
 
 # Finally, these are the processes we're going to track
 # These are used for "grep" and have to be unique in "ps"
-PROC_TRACKED=("grafana" "influxd" "telegraf" "kapacitord" "chronograf" )
+PROC_TRACKED=("phala-node" )
 
 # Reset the payload file in case it exists
-TF="/tmp/influxdb_payload.tmp"
+TF="/tmp/influxdb_vitals.tmp"
 rm ${TF}
 touch ${TF}
 
@@ -44,6 +44,12 @@ do
         echo $FS | awk -v LABEL="fs_available,host=${H},device=${D} value=" '{ print LABEL $4 }' >> ${TF}
 done
 
+# Report about operating memory
+for M in ${MEM_TRACKED[@]};
+do
+        grep -i ${M} /proc/meminfo | awk -v LABEL="mem_${M},host=${H} value=" '{ print LABEL $2 }' >> ${TF}
+done
+
 # Report about running processes
 PSR="$(ps -eo etimes,c,rss,vsz,comm)"
 for P in ${PROC_TRACKED[@]};
@@ -56,7 +62,7 @@ done
 
 echo "gather_stats_musec,host=${H} value="$(( $(echo $EPOCHREALTIME | sed 's/\.//') - ${PERF_START} )) | tee -a ${TF}
 
-curl -i -XPOST "http://INFLUXDBHOST:PORT/write?db=homebrew" --data-binary @${TF}
+curl -i -XPOST "http://(INFLUXDB)/write?db=homebrew" --data-binary @${TF}
 
 echo
 echo $(( $(echo $EPOCHREALTIME | sed 's/\.//') - ${PERF_START} )) microseconds to run this script.
