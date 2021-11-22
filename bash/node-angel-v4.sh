@@ -33,6 +33,10 @@ function _restart_container {
         local CURRENTDIR=`pwd`
         cd ${INSTALLDIR}
         /usr/bin/docker stop "phala-node"
+        if [ "$1" == "pull" ]
+        then
+                /usr/local/bin/docker-compose pull
+        fi
         /usr/local/bin/docker-compose up -d phala-node
         cd ${CURRENTDIR}
 }
@@ -109,7 +113,7 @@ function _blockchain_check {
                 # Add discovered stats to InfluxDB payload
                 if [ "${INFLUXDBHOST}" != "no" ]; then
                         LABEL=`echo "${METRIC}" | tr '[:upper:]' '[:lower:]'`
-                        echo "phala_khala_node_${LABEL},host=${H} value=$(eval "echo \$${METRIC}")" >> ${TF}
+                        echo "khala_node_${LABEL},host=${H} value=$(eval "echo \$${METRIC}")" >> ${TF}
                 fi
 
                 # Add this metric to the .(process).dat file
@@ -143,14 +147,19 @@ then
                 L30="$(docker logs --tail 30 phala-node 2>&1)"
                 KHALA_CURRENT=$(echo "$L30" | grep Parachain | grep best | tail -n 1 | awk '{ print $12} '| sed 's/#//')
                 KHALA_HEIGHT=$(echo "$L30" | grep Parachain | grep best | tail -n 1 | awk '{ print $9} '| sed 's/#//')
+                KHALA_PEERS=$(echo "$L30" | grep Parachain | grep best | tail -n 1 | awk '{ print $6} '| sed 's/(//')
                 KUSAMA_CURRENT=$(echo "$L30" | grep Relaychain | grep best | tail -n 1 | awk '{ print $12} '| sed 's/#//')
                 KUSAMA_HEIGHT=$(echo "$L30" | grep Relaychain | grep best | tail -n 1 | awk '{ print $9} '| sed 's/#//')
+                KUSAMA_PEERS=$(echo "$L30" | grep Relaychain | grep best | tail -n 1 | awk '{ print $6} '| sed 's/(//')
                 _blockchain_check
 
-                # Add discovered stats to InfluxDB payload
-                if [ "${INFLUXDBHOST}" != "no" ]
+                if [ "${RESTART_FLAG}" -eq 0 ]
                 then
-                        echo "phala_khala_node_uptime,host=${H} value=${U}" >> ${TF}
+                        if [ $(($KHALA_PEERS + $KUSAMA_PEERS )) -lt 8 ]
+                        then
+                                RESTART_FLAG=$(( ${RESTART_FLAG} + 8 ))
+                                _restart_container pull
+                        fi
                 fi
         fi
 fi
@@ -159,7 +168,10 @@ fi
 if [ "${INFLUXDBHOST}" != "no" ]
 then
         # Ship all findings to InfluxDB
-        echo "phala_reboot_flags,host=${H} value=${RESTART_FLAG}" >> ${TF}
+        echo "khala_node_uptime,host=${H} value=${U}" >> ${TF}
+        echo "khala_node_khala_peers,host=${H} value=${KHALA_PEERS}" >> ${TF}
+        echo "khala_node_kusama_peers,host=${H} value=${KUSAMA_PEERS}" >> ${TF}
+        echo "khala_reboot_flags,host=${H} value=${RESTART_FLAG}" >> ${TF}
         curl -i -XPOST "http://${INFLUXDBHOST}/write?db=${INFLUXDBNAME}" --data-binary @${TF}
 else
         if [ "$CRONJOB" == "no" ]; then echo "InfluxDB skipped." ;fi
