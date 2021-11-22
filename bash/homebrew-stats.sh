@@ -38,7 +38,7 @@ do
         THREADS=$(echo "$PSR" | grep -i ${P} | wc -l)
         if [ "$THREADS" == "0" ]; then
                 echo "Process ${P} not found among active processes."
-        elseif [ "$THREADS" == "1" ]
+        elif [ "$THREADS" == "1" ]; then
                 echo "$PSR" | grep -i ${P} | awk -v LABEL="proc_etimes_${P},host=${H} value=" '{ print LABEL $1 }' >> ${TF}
                 echo "$PSR" | grep -i ${P} | awk -v LABEL="proc_cpu_${P},host=${H} value=" '{ print LABEL $2 }' >> ${TF}
                 echo "$PSR" | grep -i ${P} | awk -v LABEL="proc_activemem_${P},host=${H} value=" '{ print LABEL $3 }' >> ${TF}
