@@ -35,10 +35,24 @@ done
 PSR="$(ps -eo etimes,c,rss,vsz,comm)"
 for P in ${PROC_TRACKED[@]};
 do
-        echo "$PSR" | grep -i ${P} | awk -v LABEL="proc_etimes_${P},host=${H} value=" '{ print LABEL $1 }' >> ${TF}
-        echo "$PSR" | grep -i ${P} | awk -v LABEL="proc_cpu_${P},host=${H} value=" '{ print LABEL $2 }' >> ${TF}
-        echo "$PSR" | grep -i ${P} | awk -v LABEL="proc_activemem_${P},host=${H} value=" '{ print LABEL $3 }' >> ${TF}
-        echo "$PSR" | grep -i ${P} | awk -v LABEL="proc_virtualmem_${P},host=${H} value=" '{ print LABEL $4 }' >> ${TF}
+        THREADS=echo "$PSR" | grep -i ${P} | wc -l
+        if [ $THREADS -eq 0 ]
+        then
+                echo "Process ${P} not found among active processes."
+        elseif [ $THREADS -eq 1 ]
+        then
+                echo "$PSR" | grep -i ${P} | awk -v LABEL="proc_etimes_${P},host=${H} value=" '{ print LABEL $1 }' >> ${TF}
+                echo "$PSR" | grep -i ${P} | awk -v LABEL="proc_cpu_${P},host=${H} value=" '{ print LABEL $2 }' >> ${TF}
+                echo "$PSR" | grep -i ${P} | awk -v LABEL="proc_activemem_${P},host=${H} value=" '{ print LABEL $3 }' >> ${TF}
+                echo "$PSR" | grep -i ${P} | awk -v LABEL="proc_virtualmem_${P},host=${H} value=" '{ print LABEL $4 }' >> ${TF}
+        elseif [ $THREADS -gt 1 ]
+        then
+                echo "$PSR" | grep -i ${P} | awk -v LABEL="proc_etimes_${P},host=${H} value=" '{ SUM+=$1 }END{ print LABEL SUM }' >> ${TF}
+                echo "$PSR" | grep -i ${P} | awk -v LABEL="proc_cpu_${P},host=${H} value=" '{ SUM+=$2 }END{ print LABEL SUM }' >> ${TF}
+                echo "$PSR" | grep -i ${P} | awk -v LABEL="proc_activemem_${P},host=${H} value=" '{ SUM+=$3 }END{ print LABEL SUM }' >> ${TF}
+                echo "$PSR" | grep -i ${P} | awk -v LABEL="proc_virtualmem_${P},host=${H} value=" '{ SUM+=$4 }END{ print LABEL SUM }' >> ${TF}
+                echo "proc_threads_${P},host=${H} value=${THREADS}" >> ${TF}
+        fi
 done
 
 if [ "$PERF_START" != "" ]; then
