@@ -35,7 +35,7 @@ done
 PSR="$(ps -eo etimes,c,rss,vsz,comm)"
 for P in ${PROC_TRACKED[@]};
 do
-        THREADS=echo "$PSR" | grep -i ${P} | wc -l
+        THREADS=$(echo "$PSR" | grep -i ${P} | wc -l)
         if [ "$THREADS" == "0" ]; then
                 echo "Process ${P} not found among active processes."
         elseif [ "$THREADS" == "1" ]
