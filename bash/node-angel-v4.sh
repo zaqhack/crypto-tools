@@ -1,7 +1,7 @@
 #!/bin/bash
 # Khala node "Angel Process" to make sure the node is behaving properly.
 # zaqhack - Hologram on Phala discord - Zack Stone on YouTube
-# Version 03
+# Version 04
 
 # Constants - change them to meet your environment and/or tastes
 DEBUG=0    # Set to 1 to enable
@@ -64,8 +64,9 @@ function _check_logs {
         # Has it been over 60 seconds since the last log entry?
         LASTLOG="$(/usr/bin/docker logs --tail 1 phala-node 2>&1)"
         TIMESTAMP=$(echo "${LASTLOG}" | awk '{ print $1 " " $2}' )
-        TZADJUST=$(( 8 * 60 * 60 )) # Adjust for 8-hour timezone difference (Hong Kong)
-        LASTLOG_EPOCH=$(( $(date --date="${TIMESTAMP}" +%s) + ${TZADJUST} ))
+        # TZADJUST=$(( 8 * 60 * 60 )) # Adjust for 8-hour timezone difference (Hong Kong)
+        # LASTLOG_EPOCH=$(( $(date --date="${TIMESTAMP}" +%s) + ${TZADJUST} ))
+        LASTLOG_EPOCH=$(date --date="${TIMESTAMP}" +%s)
         TIMEDIFF=$(( $EPOCHSECONDS - $LASTLOG_EPOCH ))
         if [ "${TIMEDIFF}" -gt 60 ]; then
                 if [ "$CRONJOB" == "no" ]; then echo "Logs are stale; assuming process frozen." ;fi
@@ -145,12 +146,33 @@ then
         if [ "${RESTART_FLAG}" -eq 0 ]
         then
                 L30="$(docker logs --tail 30 phala-node 2>&1)"
-                KHALA_CURRENT=$(echo "$L30" | grep Parachain | grep best | tail -n 1 | awk '{ print $12} '| sed 's/#//')
-                KHALA_HEIGHT=$(echo "$L30" | grep Parachain | grep best | tail -n 1 | awk '{ print $9} '| sed 's/#//')
-                KHALA_PEERS=$(echo "$L30" | grep Parachain | grep best | tail -n 1 | awk '{ print $6} '| sed 's/(//')
-                KUSAMA_CURRENT=$(echo "$L30" | grep Relaychain | grep best | tail -n 1 | awk '{ print $12} '| sed 's/#//')
-                KUSAMA_HEIGHT=$(echo "$L30" | grep Relaychain | grep best | tail -n 1 | awk '{ print $9} '| sed 's/#//')
-                KUSAMA_PEERS=$(echo "$L30" | grep Relaychain | grep best | tail -n 1 | awk '{ print $6} '| sed 's/(//')
+                PARA=$(echo "$L30" | grep Parachain | grep best | tail -n 1)
+                if [[ "${PARA}" != *"Syncing"* ]]
+                then
+                        KHALA_CURRENT=$(echo "$PARA" | awk '{ print $12} '| sed 's/#//')
+                        KHALA_HEIGHT=$(echo "$PARA" | awk '{ print $9} '| sed 's/#//')
+                        KHALA_PEERS=$(echo "$PARA" | awk '{ print $6} '| sed 's/(//')
+                else
+                        KHALA_CURRENT=$(echo "$PARA" | awk '{ print $12} '| sed 's/#//')
+                        KHALA_HEIGHT=$(echo "$PARA" | awk '{ print $8} '| awk -d 'BEGIN { FS = "#"} ; { print $2 }')
+                        KHALA_PEERS=$(echo "$PARA" | awk '{ print $9} '| sed 's/(//')
+                fi
+                RELAY=$(echo "$L30" | grep Relaychain | grep best | tail -n 1)
+                if [[ "${RELAY}" != *"Syncing"* ]]
+                then
+                        KUSAMA_CURRENT=$(echo "$RELAY" | awk '{ print $12} '| sed 's/#//')
+                        KUSAMA_HEIGHT=$(echo "$RELAY" | awk '{ print $9} '| sed 's/#//')
+                        KUSAMA_PEERS=$(echo "$RELAY" | awk '{ print $6} '| sed 's/(//')
+                else
+                        KUSAMA_CURRENT=$(echo "$RELAY" | awk '{ print $12} '| sed 's/#//')
+                        KUSAMA_HEIGHT=$(echo "$RELAY" | awk '{ print $8} '| awk -d 'BEGIN { FS = "#"} ; { print $2 }')
+                        KUSAMA_PEERS=$(echo "$RELAY" | awk '{ print $9} '| sed 's/(//')
+                fi
+                if [ $DEBUG -gt 0 ]; then
+                        echo "Parachain log: ${PARA}"
+                        echo "Relaychain log: ${RELAY}"
+                fi
+
                 _blockchain_check
 
                 if [ "${RESTART_FLAG}" -eq 0 ]
@@ -173,6 +195,7 @@ then
         echo "khala_node_kusama_peers,host=${H} value=${KUSAMA_PEERS}" >> ${TF}
         echo "khala_reboot_flags,host=${H} value=${RESTART_FLAG}" >> ${TF}
         curl -i -XPOST "http://${INFLUXDBHOST}/write?db=${INFLUXDBNAME}" --data-binary @${TF}
+        if [ $DEBUG -gt 0 ]; then cat ${TF}; fi
 else
         if [ "$CRONJOB" == "no" ]; then echo "InfluxDB skipped." ;fi
 fi
