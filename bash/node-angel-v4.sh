@@ -1,10 +1,13 @@
 #!/bin/bash
 # Khala node "Angel Process" to make sure the node is behaving properly.
 # zaqhack - Hologram on Phala discord - Zack Stone on YouTube
-# Version 04
+# Version 03
 
 # Constants - change them to meet your environment and/or tastes
-DEBUG=0    # Set to 1 to enable
+#  - 0 : No debug messages
+#  - 1 : Debug messages for STDOUT
+#  - 2 : Also create ${INSTALLDIR}/reboot-node.log
+DEBUG=0
 
 # Directory requirements. Personally, I set this up with an Ansible role.
 #     console.js - the javascript console for Phala
@@ -52,6 +55,7 @@ function _is_running {
                 # Container is not running!
                 if [ "$CRONJOB" == "no" ]; then echo "Phala-node is not running!!!" ;fi
                 RESTART_FLAG=$(( ${RESTART_FLAG} + 1 ))
+                if [[ $DEBUG -gt 1 ]]; then echo `date`" Container not running." >> ${INSTALLDIR}/reboot-node.log ; fi
                 _restart_container
                 U=0
         else
@@ -70,6 +74,7 @@ function _check_logs {
         TIMEDIFF=$(( $EPOCHSECONDS - $LASTLOG_EPOCH ))
         if [ "${TIMEDIFF}" -gt 60 ]; then
                 if [ "$CRONJOB" == "no" ]; then echo "Logs are stale; assuming process frozen." ;fi
+                if [[ $DEBUG -gt 1 ]]; then echo `date`" No logs for 60 seconds - assumed frozen." >> ${INSTALLDIR}/reboot-node.log ; fi
                 RESTART_FLAG=$(( ${RESTART_FLAG} + 2 ))
                 _restart_container
         fi
@@ -84,6 +89,7 @@ function _blockchain_check {
                 # Was getting too deep into the indirect references and getting errors
                 # This pulls out one level of recursion/indirection:
                 Z="LAST_${METRIC}"; T="TIME_${METRIC}"
+                ZV=$(eval "echo \$${Z}")
 
                 if [ $DEBUG -gt 0 ]; then  # Some debug things for indirect references
                         echo "Current metric = ${METRIC} = $(eval "echo \$${METRIC}")"
@@ -92,17 +98,19 @@ function _blockchain_check {
                 fi
 
                 # Is the current metric the same as the one we saved in the file last time?
-                if [[ $(eval "echo \$${METRIC}") -eq $(eval "echo \$${Z}") ]]
+                if [[ ($(eval "echo \$${METRIC}") -eq $ZV) && ( $ZV -ne 0) ]]
                 then
                         DELTA=$(expr `date +%s` - $(eval "echo \$${T}"))
+                        if [[ $DEBUG -gt 1 ]]; then echo `date`" ${METRIC} is frozen at ${ZV} for ${DELTA} seconds." >> ${INSTALLDIR}/reboot-node.log ; fi
 
                         if [ $DEBUG -gt 0 ]; then  # Some more debug info
                                 echo "Same value"; echo "Delta seconds = $DELTA"; fi
 
-                        if [ $DELTA -gt 360 ]; then
+                        if [ $DELTA -gt 900 ]; then
                                 if [ "$CRONJOB" == "no" ]; then
                                         echo "${METRIC} is frozen ... setting restart flag."; fi
                                 RESTART="yes"
+                                if [[ $DEBUG -gt 1 ]]; then echo `date`" ${METRIC} is frozen at ${ZV} for ${DELTA} seconds. Rebooting." >> ${INSTALLDIR}/reboot-node.log ; fi
                         fi
                 else
                         if [ $DEBUG -gt 0 ]; then echo "Different value"; fi # Still more Debug
@@ -145,14 +153,17 @@ then
         _check_logs
         if [ "${RESTART_FLAG}" -eq 0 ]
         then
+                # Retrieve parameters to check from the log data
                 L30="$(docker logs --tail 30 phala-node 2>&1)"
                 PARA=$(echo "$L30" | grep Parachain | grep best | tail -n 1)
                 if [[ "${PARA}" != *"Syncing"* ]]
                 then
+                        if [ $DEBUG -gt 0 ]; then echo "Parachain sync complete?"; fi
                         KHALA_CURRENT=$(echo "$PARA" | awk '{ print $12} '| sed 's/#//')
                         KHALA_HEIGHT=$(echo "$PARA" | awk '{ print $9} '| sed 's/#//')
                         KHALA_PEERS=$(echo "$PARA" | awk '{ print $6} '| sed 's/(//')
                 else
+                        if [ $DEBUG -gt 0 ]; then echo "Parachain sync in progress."; fi
                         KHALA_CURRENT=$(echo "$PARA" | awk '{ print $12} '| sed 's/#//')
                         KHALA_HEIGHT=$(echo "$PARA" | awk '{ print $8} '| awk -d 'BEGIN { FS = "#"} ; { print $2 }')
                         KHALA_PEERS=$(echo "$PARA" | awk '{ print $9} '| sed 's/(//')
@@ -160,10 +171,12 @@ then
                 RELAY=$(echo "$L30" | grep Relaychain | grep best | tail -n 1)
                 if [[ "${RELAY}" != *"Syncing"* ]]
                 then
+                        if [ $DEBUG -gt 0 ]; then echo "Relaychain sync complete?"; fi
                         KUSAMA_CURRENT=$(echo "$RELAY" | awk '{ print $12} '| sed 's/#//')
                         KUSAMA_HEIGHT=$(echo "$RELAY" | awk '{ print $9} '| sed 's/#//')
                         KUSAMA_PEERS=$(echo "$RELAY" | awk '{ print $6} '| sed 's/(//')
                 else
+                        if [ $DEBUG -gt 0 ]; then echo "Relaychain sync in progress."; fi
                         KUSAMA_CURRENT=$(echo "$RELAY" | awk '{ print $12} '| sed 's/#//')
                         KUSAMA_HEIGHT=$(echo "$RELAY" | awk '{ print $8} '| awk -d 'BEGIN { FS = "#"} ; { print $2 }')
                         KUSAMA_PEERS=$(echo "$RELAY" | awk '{ print $9} '| sed 's/(//')
@@ -173,12 +186,16 @@ then
                         echo "Relaychain log: ${RELAY}"
                 fi
 
+                # Perform the check
                 _blockchain_check
+                if [[ ($DEBUG -gt 1) && ($RESTART_FLAG -gt 3) ]]; then cat .node.dat >> ${INSTALLDIR}/reboot-node.log ; fi
+
 
                 if [ "${RESTART_FLAG}" -eq 0 ]
                 then
                         if [ $(($KHALA_PEERS + $KUSAMA_PEERS )) -lt 8 ]
                         then
+                                if [[ $DEBUG -gt 1 ]]; then echo `date`" Fewer than 8 peers. Assuming trouble." >> ${INSTALLDIR}/reboot-node.log ; fi
                                 RESTART_FLAG=$(( ${RESTART_FLAG} + 8 ))
                                 _restart_container pull
                         fi
