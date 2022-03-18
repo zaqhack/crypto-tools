@@ -25,6 +25,12 @@ INFLUXDBHOST=no
 INFLUXDBNAME=homebrew             # Name of the database
 TF=/tmp/influxdb-payload.tmp      # Temp file for database inputs
 
+# Optional - push alerts to Telegram group/channel.
+#     Put channel/group ID here if you want to use this feature or "no" for disabled.
+TELEGRAMCHAT=no                   # Channel/Group ID
+TELEGRAMTOKEN=                    # API token for Telegram
+TG=/tmp/telegram-payload.tmp      # Temp file for database inputs
+
 # Process arrays to make the checks interative/recycle-able
 K=("KHALA_CURRENT" "KHALA_HEIGHT" "KUSAMA_CURRENT" "KUSAMA_HEIGHT")
 
@@ -54,6 +60,7 @@ function _is_running {
         then
                 # Container is not running!
                 if [ "$CRONJOB" == "no" ]; then echo "Phala-node is not running!!!" ;fi
+                if [ "$TELEGRAMCHAT" != "no" ]; then echo "Phala-node is not running! Restarting." >> ${TG} ;fi
                 RESTART_FLAG=$(( ${RESTART_FLAG} + 1 ))
                 if [[ $DEBUG -gt 1 ]]; then echo `date`" Container not running." >> ${INSTALLDIR}/reboot-node.log ; fi
                 _restart_container
@@ -74,6 +81,7 @@ function _check_logs {
         TIMEDIFF=$(( $EPOCHSECONDS - $LASTLOG_EPOCH ))
         if [ "${TIMEDIFF}" -gt 60 ]; then
                 if [ "$CRONJOB" == "no" ]; then echo "Logs are stale; assuming process frozen." ;fi
+                if [ "$TELEGRAMCHAT" != "no" ]; then echo "Logs are stale; assuming process frozen." >> ${TG} ;fi
                 if [[ $DEBUG -gt 1 ]]; then echo `date`" No logs for 60 seconds - assumed frozen." >> ${INSTALLDIR}/reboot-node.log ; fi
                 RESTART_FLAG=$(( ${RESTART_FLAG} + 2 ))
                 _restart_container
@@ -107,8 +115,8 @@ function _blockchain_check {
                                 echo "Same value"; echo "Delta seconds = $DELTA"; fi
 
                         if [ $DELTA -gt 900 ]; then
-                                if [ "$CRONJOB" == "no" ]; then
-                                        echo "${METRIC} is frozen ... setting restart flag."; fi
+                                if [ "$CRONJOB" == "no" ]; then echo "${METRIC} is frozen ... setting restart flag."; fi
+                                if [ "$TELEGRAMCHAT" != "no" ]; then echo `date`" ${METRIC} is frozen at ${ZV} for ${DELTA} seconds. Rebooting." >> ${TG} ;fi
                                 RESTART="yes"
                                 if [[ $DEBUG -gt 1 ]]; then echo `date`" ${METRIC} is frozen at ${ZV} for ${DELTA} seconds. Rebooting." >> ${INSTALLDIR}/reboot-node.log ; fi
                         fi
@@ -145,6 +153,10 @@ then
         touch ${TF}
         H=`hostname`
 fi
+
+# Reset Telegram payload file
+if [ "${TELEGRAMCHAT}" != "no" ]; then touch ${TG}; echo '' > ${TG}; fi
+
 
 # Loop through the checks to see if the node is up
 _is_running
@@ -196,6 +208,7 @@ then
                         if [ $(($KHALA_PEERS + $KUSAMA_PEERS )) -lt 8 ]
                         then
                                 if [[ $DEBUG -gt 1 ]]; then echo `date`" Fewer than 8 peers. Assuming trouble." >> ${INSTALLDIR}/reboot-node.log ; fi
+                                if [ "$TELEGRAMCHAT" != "no" ]; then echo `date`" Fewer than 8 peers. Assuming trouble." >> ${TG} ;fi
                                 RESTART_FLAG=$(( ${RESTART_FLAG} + 8 ))
                                 _restart_container pull
                         fi
@@ -215,4 +228,14 @@ then
         if [ $DEBUG -gt 0 ]; then cat ${TF}; fi
 else
         if [ "$CRONJOB" == "no" ]; then echo "InfluxDB skipped." ;fi
+fi
+
+# Send to Telegram?
+if [[ ($TELEGRAMCHAT != "no") && ($RESTART_FLAG -gt 0) ]]
+then
+        echo "*Khala:* ${KHALA_CURRENT} / ${KHALA_HEIGHT} (${KHALA_PEERS})" >> ${TG}
+        echo "*Kusama:* ${KUSAMA_CURRENT} / ${KUSAMA_HEIGHT} (${KUSAMA_PEERS})" >> ${TG}
+        TELEGRAMDATA=$(cat $TG)
+        curl --silent --output /dev/null -X POST -H 'Content-Type: application/json' \
+                -d '{"chat_id": "'${TELEGRAMCHAT}'", "text": "'"${TELEGRAMDATA}"'", "parse_mode": "Markdown"}' "https://api.telegram.org/bot${TELEGRAMTOKEN}/sendMessage"
 fi
